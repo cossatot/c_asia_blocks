@@ -14,7 +14,7 @@ using PyPlot
 
 # options
 fault_weight = 2.
-save_results = false
+save_results = true
 
 
 # load data
@@ -116,7 +116,7 @@ println("n geol slip rates: ", length(geol_slip_rate_vels))
 tri_json = JSON.parsefile(tris_file)
 tris = Oiler.IO.tris_from_geojson(tri_json)
 
-function set_tri_rates(tri; ds=10., de=1., ss=0., se=0.5)
+function set_tri_rates(tri; ds=5., de=1., ss=0., se=0.5)
     tri = @set tri.dip_slip_rate = ds
     tri = @set tri.dip_slip_err = de
     tri = @set tri.strike_slip_rate = ss
@@ -138,36 +138,32 @@ results = Oiler.solve_block_invs_from_vel_groups(vel_groups; faults=faults,
                                                 sparse_lhs=false,
                                                 weighted=true,
                                                 regularize_tris=true,
-                                                tri_priors=false,
-                                                tri_distance_weight=10.,
+                                                tri_priors=true,
+                                                tri_distance_weight=50.,
                                                 predict_vels=true,
-                                                check_closures=false,
+                                                check_closures=true,
                                                 pred_se=true,
                                                 factorization="lu")
 
 
-Oiler.IO.write_tri_results_to_gj(tris, results, 
-    "../results/makran_zagros_tri_results.geojson";
-    name="Makran-Zagros tri results")
-
-Oiler.IO.write_fault_results_to_gj(results, 
-    "../results/c_asia_fault_results.geojson",
-    name="Central Asia fault results")
-
+if save_results == true
+    Oiler.IO.write_tri_results_to_gj(tris, results, 
+        "../results/makran_zagros_tri_results.geojson";
+        name="Makran-Zagros tri results")
+    
+    Oiler.IO.write_fault_results_to_gj(results, 
+        "../results/c_asia_fault_results.geojson",
+        name="Central Asia fault results")
+end
 
 # plot
-pole_arr = collect(values(results["poles"]))
-pole_arr = [pole for pole in pole_arr if typeof(pole) == Oiler.PoleCart]
 
-obs_vels = [v["vel"] for v in Oiler.Utils.get_gnss_vels(vel_groups)]
-pred_vels = [v["vel"] for v in Oiler.Utils.get_gnss_vels(results["predicted_vels"])]
+obs_vel_df = Oiler.Utils.make_df_from_vel_array(gnss_vels)
+pred_vel_df = Oiler.Utils.get_gnss_results(results, vel_groups)
 
-glons, glats = Oiler.Utils.get_coords_from_vel_array(obs_vels)
-ove = [v.ve for v in obs_vels]
-ovn = [v.vn for v in obs_vels]
-
-pve = [v.ve for v in pred_vels]
-pvn = [v.vn for v in pred_vels]
+if save_results == true
+    CSV.write("../results/pred_vels.csv", pred_vel_df)
+end
 
 figure(figsize=(14, 14))
 
@@ -202,8 +198,10 @@ for fault in faults
     plot(fault.trace[:,1], fault.trace[:,2], "k-", lw=0.3)
 end
 
-quiver(glons, glats, ove, ovn, color="b", scale=300)
-quiver(glons, glats, pve, pvn, color="r", scale=300)
+quiver(obs_vel_df.lon, obs_vel_df.lat,
+       obs_vel_df.ve, obs_vel_df.vn, color="b", scale=300)
+quiver(pred_vel_df.lon, pred_vel_df.lat,
+       pred_vel_df.ve, pred_vel_df.vn, color="r", scale=300)
 axis("equal")
 show()
 
