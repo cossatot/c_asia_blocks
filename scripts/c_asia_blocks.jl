@@ -7,6 +7,7 @@ using CSV
 using JSON
 using DataFrames, DataFramesMeta
 using ArchGDAL
+using Setfield
 const AG = ArchGDAL
 
 using PyPlot
@@ -109,12 +110,21 @@ cea_slip_rates = Oiler.IO.make_geol_slip_rate_vel_vec(cea_slip_rate_df,
    cea_fault_df; err_return_val=5.)
 geol_slip_rate_vels = vcat(chn_slip_rates, cea_slip_rates)
 
-println("n fault slip rate vels: ", length(geol_slip_rate_vels))
+println("n geol slip rates: ", length(geol_slip_rate_vels))
 
 # tris
 tri_json = JSON.parsefile(tris_file)
 tris = Oiler.IO.tris_from_geojson(tri_json)
 
+function set_tri_rates(tri; ds=10., de=1., ss=0., se=0.5)
+    tri = @set tri.dip_slip_rate = ds
+    tri = @set tri.dip_slip_err = de
+    tri = @set tri.strike_slip_rate = ss
+    tri = @set tri.strike_slip_err = se
+    tri
+end
+
+tris = map(set_tri_rates, tris)
 
 
 vels = vcat(fault_vels, gnss_vels, geol_slip_rate_vels)
@@ -127,11 +137,13 @@ results = Oiler.solve_block_invs_from_vel_groups(vel_groups; faults=faults,
                                                 tris=tris,
                                                 sparse_lhs=false,
                                                 weighted=true,
-                                                tri_distance_weight=100.,
+                                                regularize_tris=true,
+                                                tri_priors=false,
+                                                tri_distance_weight=10.,
                                                 predict_vels=true,
                                                 check_closures=false,
                                                 pred_se=true,
-                                                factorization="svd")
+                                                factorization="lu")
 
 
 Oiler.IO.write_tri_results_to_gj(tris, results, 
