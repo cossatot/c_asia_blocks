@@ -29,6 +29,7 @@ chn_slip_rate_file = "../../../fault_data/china/block_data/geol_slip_rate_pts.ge
 
 gsrm_vels_file = "../gnss_data/gsrm_c_asia_vels.geojson"
 comet_gnss_vels_file = "../gnss_data/comet_c_asia_gnss_vels.geojson"
+vel_field_file = "../../../fault_data/china/geod/tibet_vel_field.geojson"
 
 boundary_file = "../block_data/cea_gnss_block_domain.geojson"
 
@@ -44,6 +45,8 @@ chn_slip_rate_df = Oiler.IO.gis_vec_file_to_df(chn_slip_rate_file)
 gsrm_vel_df = Oiler.IO.gis_vec_file_to_df(gsrm_vels_file)
 comet_vel_df = Oiler.IO.gis_vec_file_to_df(comet_gnss_vels_file)
 
+vel_field_df = Oiler.IO.gis_vec_file_to_df(vel_field_file)
+vel_field_df[!,"station"] = string.(vel_field_df[!,:id])
 bound_df = Oiler.IO.gis_vec_file_to_df(boundary_file)
 
 
@@ -95,9 +98,12 @@ gsrm_vels = Oiler.IO.make_vels_from_gnss_and_blocks(gsrm_vel_df, block_df;
     fix="1111"
 )
 
+vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(vel_field_df, block_df;
+    fix="1111")
 gnss_vels = vcat(comet_vels, gsrm_vels)
 
 println("n gnss vels: ", length(gnss_vels))
+println("n vel field vels: ", length(vel_field_vels))
 
 
 # geol slip rates
@@ -127,7 +133,7 @@ end
 tris = map(set_tri_rates, tris)
 
 
-vels = vcat(fault_vels, gnss_vels, geol_slip_rate_vels)
+vels = vcat(fault_vels, gnss_vels, geol_slip_rate_vels, vel_field_vels)
 
 vel_groups = Oiler.group_vels_by_fix_mov(vels);
 
