@@ -1,10 +1,10 @@
-using DataFrames:eachrow
 using Revise
 
 using Oiler
 
 using CSV
 using JSON
+using DataFrames:eachrow
 using DataFrames, DataFramesMeta
 using ArchGDAL
 using Setfield
@@ -14,7 +14,7 @@ using PyPlot
 
 # options
 fault_weight = 2.
-save_results = true
+save_results = false
 
 
 # load data
@@ -34,87 +34,70 @@ vel_field_file = "../../../fault_data/china/geod/tibet_vel_field.geojson"
 boundary_file = "../block_data/cea_gnss_block_domain.geojson"
 
 
-cea_fault_df = Oiler.IO.gis_vec_file_to_df(cea_fault_file)
+@info "joining blocks"
 cea_block_df = Oiler.IO.gis_vec_file_to_df(cea_block_file)
-cea_slip_rate_df = Oiler.IO.gis_vec_file_to_df(cea_slip_rate_file)
-
-chn_fault_df = Oiler.IO.gis_vec_file_to_df(chn_fault_file)
 chn_block_df = Oiler.IO.gis_vec_file_to_df(chn_block_file)
-chn_slip_rate_df = Oiler.IO.gis_vec_file_to_df(chn_slip_rate_file)
+chn_block_df.fid = string.(chn_block_df.fid)
+block_df = vcat(chn_block_df, cea_block_df; cols=:union)
 
+@info "culling blocks"
+println("n blocks before ", size(block_df, 1))
+bound_df = Oiler.IO.gis_vec_file_to_df(boundary_file)
+block_df = Oiler.IO.get_blocks_in_bounds!(block_df, bound_df; epsg=2991)
+println("n blocks after ", size(block_df, 1))
+
+@info "doing faults"
+fault_df, faults, fault_vels = Oiler.IO.process_faults_from_gis_files(
+                                                        chn_fault_file,
+                                                        cea_fault_file;
+                                                        block_df=block_df,
+                                                        subset_in_bounds=true,
+                                                        )
+fault_df[:,:fid] = string.(fault_df[:,:fid])
+println("n faults: ", length(faults))
+println("n fault vels: ", length(fault_vels))
+
+@info "doing GNSS"
 gsrm_vel_df = Oiler.IO.gis_vec_file_to_df(gsrm_vels_file)
 comet_vel_df = Oiler.IO.gis_vec_file_to_df(comet_gnss_vels_file)
 
 vel_field_df = Oiler.IO.gis_vec_file_to_df(vel_field_file)
 vel_field_df[!,"station"] = string.(vel_field_df[!,:id])
-bound_df = Oiler.IO.gis_vec_file_to_df(boundary_file)
-
-
-## filter data by location
-
-# filter CHN blocks and faults in model domain
-function get_blocks_in_bounds(block_df, bdf)
-    bound = bdf[1,:geometry]
-    bgs = block_df[:,:geometry]
-    idxs = falses(length(bgs))
-    for (i, block_geom) in enumerate(bgs)
-        if AG.intersects(bound, block_geom)
-            idxs[i] = true
-        end
-    end
-    block_df[idxs, :]
-end
-
-chn_block_df = get_blocks_in_bounds(chn_block_df, bound_df)
-chn_fault_df = get_blocks_in_bounds(chn_fault_df, bound_df)
-
-cea_block_df.color = ["" for i in 1:size(cea_block_df, 1)]
-
-# join blocks and faults
-chn_block_df.fid = string.(chn_block_df.fid)
-chn_fault_df.fid = string.(chn_fault_df.fid)
-block_df = vcat(chn_block_df, cea_block_df)
-println("n blocks: ", size(block_df, 1))
-
-chn_faults = map(Oiler.IO.row_to_fault, eachrow(chn_fault_df))
-cea_faults = map(Oiler.IO.row_to_fault, eachrow(cea_fault_df))
-faults = vcat(chn_faults, cea_faults)
-fault_vels = reduce(vcat, map(Oiler.IO.fault_to_vels, faults))
-
-println("n faults: ", length(faults))
-println("n faults vels: ", length(fault_vels))
-
-# get GNSS indices
 
 comet_vel_df.sig_east .* 2.
 comet_vel_df.sig_north .* 2.
 
-comet_vels = Oiler.IO.make_vels_from_gnss_and_blocks(comet_vel_df, block_df;
+@info "doing COMET GNSS vels"
+@time comet_vels = Oiler.IO.make_vels_from_gnss_and_blocks(comet_vel_df, block_df;
     ve=:v_east, vn=:v_north, ee=:sig_east, en=:sig_north, name=:name,
     fix="1111"
 )
-gsrm_vels = Oiler.IO.make_vels_from_gnss_and_blocks(gsrm_vel_df, block_df;
+
+@info "doing GSRM vels"
+@time gsrm_vels = Oiler.IO.make_vels_from_gnss_and_blocks(gsrm_vel_df, block_df;
     ve=:e_vel, vn=:n_vel, ee=:e_err, en=:n_err, name=:station,
     fix="1111"
 )
 
+@info "doing COMET InSAR vels"
 vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(vel_field_df, block_df;
     fix="1111")
-gnss_vels = vcat(comet_vels, gsrm_vels)
+
+
+gnss_vels = vcat(comet_vels, gsrm_vels, vel_field_vels)
 
 println("n gnss vels: ", length(gnss_vels))
-println("n vel field vels: ", length(vel_field_vels))
+#println("n vel field vels: ", length(vel_field_vels))
 
 
-# geol slip rates
-chn_slip_rate_df = filter(x -> x.fault_seg in chn_fault_df.fid, 
-    chn_slip_rate_df)
+@info "doing geol slip rates"
+cea_slip_rate_df = Oiler.IO.gis_vec_file_to_df(cea_slip_rate_file)
+chn_slip_rate_df = Oiler.IO.gis_vec_file_to_df(chn_slip_rate_file)
+geol_slip_rate_df = vcat(cea_slip_rate_df, chn_slip_rate_df)
 
-chn_slip_rates = Oiler.IO.make_geol_slip_rate_vel_vec(chn_slip_rate_df, 
-   chn_fault_df; err_return_val=5.)
-cea_slip_rates = Oiler.IO.make_geol_slip_rate_vel_vec(cea_slip_rate_df, 
-   cea_fault_df; err_return_val=5.)
-geol_slip_rate_vels = vcat(chn_slip_rates, cea_slip_rates)
+geol_slip_rate_df, geol_slip_rate_vels = Oiler.IO.make_geol_slip_rate_vels!(
+                                                geol_slip_rate_df,
+                                                fault_df)
 
 println("n geol slip rates: ", length(geol_slip_rate_vels))
 
@@ -144,12 +127,41 @@ results = Oiler.solve_block_invs_from_vel_groups(vel_groups; faults=faults,
                                                 sparse_lhs=false,
                                                 weighted=true,
                                                 regularize_tris=true,
-                                                tri_priors=true,
-                                                tri_distance_weight=50.,
+                                                tri_priors=false,
+                                                tri_distance_weight=20.,
                                                 predict_vels=true,
                                                 check_closures=true,
                                                 pred_se=true,
+                                                constraint_method="kkt_sym",
                                                 factorization="lu")
+
+Oiler.ResultsAnalysis.compare_data_results(results=results,
+                                           vel_groups=vel_groups,
+                                           geol_slip_rate_df=geol_slip_rate_df,
+                                           geol_slip_rate_vels=geol_slip_rate_vels,
+                                           fault_df=fault_df,
+                                           )
+
+block_bound_df = Oiler.IO.gis_vec_file_to_df("../block_data/c_asia_block_bounds.geojson")
+
+function make_bound_fault(row)
+    trace = Oiler.IO.get_coords_from_geom(row[:geometry])
+
+    Oiler.Fault(trace=trace, dip_dir=row[:dip_dir], dip=89., hw=row[:hw],
+                fw=row[:fw], fid=row[:fid])
+end
+
+@info "getting block rates"
+bound_faults = []
+for i in 1:size(block_bound_df, 1)
+    push!(bound_faults, make_bound_fault(block_bound_df[i,:]))
+end
+
+block_bound_rates = Oiler.Utils.get_fault_slip_rates_from_poles(bound_faults,
+                                                                results["poles"],
+                                                                use_path=true)
+
+
 
 
 if save_results == true
@@ -162,52 +174,33 @@ if save_results == true
         name="Central Asia fault results")
 end
 
-# plot
 
-obs_vel_df = Oiler.Utils.make_df_from_vel_array(gnss_vels)
-pred_vel_df = Oiler.Utils.get_gnss_results(results, vel_groups)
-
-if save_results == true
-    CSV.write("../results/pred_vels.csv", pred_vel_df)
-end
-
-figure(figsize=(14, 14))
-
-cm = get_cmap(:viridis)
-
-function get_tri_total_rate(tri)
-    ds = results["tri_slip_rates"][tri.name]["dip_slip"]
-    ss = results["tri_slip_rates"][tri.name]["strike_slip"]
-    total_rate = sqrt(ds^2 + ss^2)
-end
-
-tri_rates = [get_tri_total_rate(tri) for tri in tris]
-tri_rate_min = minimum(tri_rates)
-tri_rate_max = maximum(tri_rates)
-
-function plot_tri(tri; vmin=tri_rate_min, vmax=tri_rate_max)
-    lons = [tri.p1[1], tri.p2[1], tri.p3[1], tri.p1[1]]
-    lats = [tri.p1[2], tri.p2[2], tri.p3[2], tri.p1[2]]
-    total_rate = get_tri_total_rate(tri)
-    rate_frac = (total_rate - vmin) / (vmax - vmin)
-    color = cm(rate_frac)
-    # color = [0., 0., rate_frac]
-    fill(lons, lats, color=color, alpha=0.25, zorder=0)
-end
-
-for tri in tris
-    plot_tri(tri)
+function get_net_slip_rate(fault)
+    sqrt(fault.dextral_rate^2+fault.extension_rate^2)
 end
 
 
-for fault in faults
-    plot(fault.trace[:,1], fault.trace[:,2], "k-", lw=0.3)
+
+fault_rates = get_net_slip_rate.(results["predicted_slip_rates"])
+fault_lengths = map(x->Oiler.Geom.polyline_length(x.trace), results["predicted_slip_rates"])
+
+rate_tups = []
+lengths = []
+bf_rates = []
+for (i, bf) in enumerate(bound_faults)
+    if !(isnan(block_bound_rates[i][1]))
+        #push!(rate_tups, (i, block_bound_rates[i])
+        push!(lengths, Oiler.Geom.polyline_length(bound_faults[i].trace))
+        push!(bf_rates, sqrt(block_bound_rates[i][1]^2 + block_bound_rates[i][2]^2))
+    end
 end
 
-quiver(obs_vel_df.lon, obs_vel_df.lat,
-       obs_vel_df.ve, obs_vel_df.vn, color="b", scale=300)
-quiver(pred_vel_df.lon, pred_vel_df.lat,
-       pred_vel_df.ve, pred_vel_df.vn, color="r", scale=300)
-axis("equal")
+
+
+map_fig = Oiler.Plots.plot_results_map(results, vel_groups, faults, tris)
+
+slip_rate_fig = Oiler.Plots.plot_slip_rate_fig(geol_slip_rate_df,
+    geol_slip_rate_vels, fault_df, results)
+
 show()
 
