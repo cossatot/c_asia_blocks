@@ -1,5 +1,6 @@
 {
 "type": "FeatureCollection",
+"name": "c_asia_geol_slip_rates",
 "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
 "features": [
 { "type": "Feature", "properties": { "dextral_rate": 3.3, "dextral_err": 1.6, "extension_rate": null, "extension_err": null, "source": "Mousavi et al., 2021 Tectonics", "notes": "Site A (Shesh Taraz)", "fault_seg": "caf148", "include": true }, "geometry": { "type": "Point", "coordinates": [ 58.16529409172275, 35.296913437396277 ] } },
@@ -15,7 +16,7 @@
 { "type": "Feature", "properties": { "dextral_rate": 0.41, "dextral_err": 0.03, "extension_rate": null, "extension_err": null, "source": "Le Dortz et al. 2009 GJI", "notes": "Site 2.  Considered too slow by authors.", "fault_seg": "caf237", "include": false }, "geometry": { "type": "Point", "coordinates": [ 55.132633041521451, 31.269955277573818 ] } },
 { "type": "Feature", "properties": { "dextral_rate": 4.3, "dextral_err": 0.6, "extension_rate": null, "extension_err": null, "source": "Shabanian et al. 2009", "notes": "Namanlu site", "fault_seg": "caf042", "include": true }, "geometry": { "type": "Point", "coordinates": [ 58.097340003460566, 37.682450827373877 ] } },
 { "type": "Feature", "properties": { "dextral_rate": 2.8, "dextral_err": 1.0, "extension_rate": null, "extension_err": null, "source": "Shabanian et al. 2009 GJI", "notes": "Zakranlu site, Baghan fault", "fault_seg": null, "include": false }, "geometry": { "type": "Point", "coordinates": [ 58.019704790518276, 37.560032028522777 ] } },
-{ "type": "Feature", "properties": { "dextral_rate": 6.9, "dextral_err": 0.4, "extension_rate": null, "extension_err": null, "source": "Rizza et al. 2013 GJI", "notes": null, "fault_seg": null, "include": false }, "geometry": { "type": "Point", "coordinates": [ 46.085297539184189, 38.232736241584796 ] } },
+{ "type": "Feature", "properties": { "dextral_rate": 6.9, "dextral_err": 0.4, "extension_rate": null, "extension_err": null, "source": "Rizza et al. 2013 GJI", "notes": null, "fault_seg": "anf023", "include": true }, "geometry": { "type": "Point", "coordinates": [ 46.085297539184189, 38.232736241584796 ] } },
 { "type": "Feature", "properties": { "dextral_rate": -1.9, "dextral_err": 0.6, "extension_rate": null, "extension_err": null, "source": "Rizza et al. 2011 Quaternary Geology", "notes": "Trench Creek site", "fault_seg": "caf171", "include": true }, "geometry": { "type": "Point", "coordinates": [ 54.044523620366469, 36.25758381970023 ] } },
 { "type": "Feature", "properties": { "dextral_rate": -2.0, "dextral_err": 0.3, "extension_rate": null, "extension_err": null, "source": "Rizza et al. 2011 Quaternary Geology", "notes": "Farm Creek site", "fault_seg": "caf171", "include": true }, "geometry": { "type": "Point", "coordinates": [ 53.896448527258315, 36.171084865879145 ] } },
 { "type": "Feature", "properties": { "dextral_rate": -33.1, "dextral_err": 3.32, "extension_rate": null, "extension_err": null, "source": "Ul-Hadi et al. 2013 Tectonophysics", "notes": null, "fault_seg": "caf005", "include": true }, "geometry": { "type": "Point", "coordinates": [ 66.476036638536399, 30.747651103250352 ] } },
