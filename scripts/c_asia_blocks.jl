@@ -6,9 +6,7 @@ using CSV
 using JSON
 using DataFrames:eachrow
 using DataFrames, DataFramesMeta
-using ArchGDAL
 using Setfield
-const AG = ArchGDAL
 
 using PyPlot
 
@@ -61,6 +59,7 @@ fault_df, faults, fault_vels = Oiler.IO.process_faults_from_gis_files(
                                                         cea_fault_file;
                                                         block_df=block_df,
                                                         subset_in_bounds=true,
+                                                        check_blocks=true,
                                                         )
 fault_df[:,:fid] = string.(fault_df[:,:fid])
 println("n faults: ", length(faults))
@@ -174,40 +173,19 @@ end
 #                                                                use_path=true)
 if save_results == true
     Oiler.IO.write_tri_results_to_gj(tris, results, 
-        "../results/makran_zagros_tri_results_insar.geojson";
+        "../results/makran_zagros_tri_results.geojson";
         name="Makran-Zagros tri results")
     
     Oiler.IO.write_fault_results_to_gj(results, 
-        "../results/c_asia_fault_results_insar.geojson",
-        name="Central Asia fault results")
+        "../results/c_asia_fault_results.geojson",
+        name="Central Asia fault results",
+        calc_rake=true,
+        calc_slip_rate=true)
 
     Oiler.IO.write_gnss_vel_results_to_csv(results, vel_groups;
-        name="../results/c_asia_gnss_results_insar.csv")
+        name="../results/c_asia_gnss_results.csv")
 
 end
-
-
-function get_net_slip_rate(fault)
-    sqrt(fault.dextral_rate^2+fault.extension_rate^2)
-end
-
-
-
-#fault_rates = get_net_slip_rate.(results["predicted_slip_rates"])
-#fault_lengths = map(x->Oiler.Geom.polyline_length(x.trace), results["predicted_slip_rates"])
-#
-#rate_tups = []
-#lengths = []
-#bf_rates = []
-#for (i, bf) in enumerate(bound_faults)
-#    if !(isnan(block_bound_rates[i][1]))
-#        #push!(rate_tups, (i, block_bound_rates[i])
-#        push!(lengths, Oiler.Geom.polyline_length(bound_faults[i].trace))
-#        push!(bf_rates, sqrt(block_bound_rates[i][1]^2 + block_bound_rates[i][2]^2))
-#    end
-#end
-
-
 
 map_fig = Oiler.Plots.plot_results_map(results, vel_groups, faults, tris)
 
@@ -219,49 +197,4 @@ Oiler.WebViewer.write_web_viewer(results=results, block_df=block_df,
 
 show()
 
-block_centroids = [AG.centroid(block_df[i, :geometry]) 
-                   for i in 1:size(block_df, 1)]
 
-pole_arr = collect(values(results["poles"]))
-pole_arr = [pole for pole in pole_arr if typeof(pole) == Oiler.PoleCart]
-
-centroids_lon = []
-centroids_lat = []
-centroids_ve = []
-centroids_vn = []
-centroids_ee = []
-centroids_en = []
-centroids_cen = []
-eur_rel_poles = Array{Oiler.PoleCart}(undef, size(block_centroids, 1))
-for (i, b_cent) in enumerate(block_centroids)
-    bc_lon = AG.getx(b_cent, 0)
-    bc_lat =  AG.gety(b_cent, 0)
-    push!(centroids_lon, bc_lon)
-    push!(centroids_lat, bc_lat)
-    # PvGb = Oiler.BlockRotations.build_PvGb_deg(bc_lon, bc_lat)
-    
-    pole = Oiler.Utils.get_path_euler_pole(pole_arr, "1111", 
-                                           string(block_df[i, :fid]))
-    
-    # ve, vn, vu = PvGb * [pole.x, pole.y, pole.z]
-    block_vel = Oiler.BlockRotations.predict_block_vel(bc_lon, bc_lat, pole)
-    push!(centroids_ve, block_vel.ve)
-    push!(centroids_vn, block_vel.vn)
-    push!(centroids_ee, block_vel.ee)
-    push!(centroids_en, block_vel.en)
-    push!(centroids_cen, block_vel.cen)
-    eur_rel_poles[i] = pole
-end
-
-centroids_pred_df = DataFrame()
-centroids_pred_df.lon = round.(centroids_lon, digits=5)
-centroids_pred_df.lat = round.(centroids_lat, digits=5)
-centroids_pred_df.ve =  round.(centroids_ve, digits=3)
-centroids_pred_df.vn =  round.(centroids_vn, digits=3)
-centroids_pred_df.ee =  round.(centroids_ee, digits=3)
-centroids_pred_df.en =  round.(centroids_en, digits=3)
-centroids_pred_df.cen = round.(centroids_cen, digits=3)
-
-if save_results == true
-    CSV.write("../results/block_vels.csv", centroids_pred_df)
-end
