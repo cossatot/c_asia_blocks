@@ -50,15 +50,15 @@ nea_block_df = Oiler.IO.gis_vec_file_to_df(nea_block_file)
 chn_block_df.fid = string.(chn_block_df.fid)
 block_df = vcat(chn_block_df, 
                 ana_block_df,
-                #nea_block_df,
+                nea_block_df,
                 cea_block_df; 
                 cols=:union)
 
 @info "culling blocks"
 println("n blocks before ", size(block_df, 1))
-#bound_df = Oiler.IO.gis_vec_file_to_df(boundary_file)
-#block_df = Oiler.IO.get_blocks_in_bounds!(block_df, bound_df)
-#println("n blocks after ", size(block_df, 1))
+bound_df = Oiler.IO.gis_vec_file_to_df(boundary_file)
+block_df = Oiler.IO.get_blocks_in_bounds!(block_df, bound_df)
+println("n blocks after ", size(block_df, 1))
 
 @info "doing faults"
 fault_df, faults, fault_vels = Oiler.IO.process_faults_from_gis_files(
@@ -76,7 +76,7 @@ println("n fault vels: ", length(fault_vels))
 
 @info "doing non-fault block boundaries"
 @time non_fault_bounds = Oiler.IO.get_non_fault_block_bounds(block_df, faults)
-bound_vels = vcat(map(b->Oiler.Boundaries.boundary_to_vels(b, ee=0.25, en=0.25), 
+bound_vels = vcat(map(b->Oiler.Boundaries.boundary_to_vels(b, ee=1.0, en=1.0), 
                       non_fault_bounds)...)
 println("n non-fault-bound vels: ", length(bound_vels))
 
@@ -209,31 +209,13 @@ Oiler.ResultsAnalysis.compare_data_results(results=results,
                                            fault_df=fault_df,
                                            )
 
-block_bound_df = Oiler.IO.gis_vec_file_to_df("../block_data/c_asia_block_bounds.geojson")
-
-function make_bound_fault(row)
-    trace = Oiler.IO.get_coords_from_geom(row[:geometry])
-
-    Oiler.Fault(trace=trace, dip_dir=row[:dip_dir], dip=89., hw=row[:hw],
-                fw=row[:fw], fid=row[:fid])
-end
-
-#@info "getting block rates"
-#bound_faults = []
-#for i in 1:size(block_bound_df, 1)
-#    push!(bound_faults, make_bound_fault(block_bound_df[i,:]))
-#end
-#
-#block_bound_rates = Oiler.Utils.get_fault_slip_rates_from_poles(bound_faults,
-#                                                                results["poles"],
-#                                                                use_path=true)
 if save_results == true
     Oiler.IO.write_tri_results_to_gj(tris, results, 
         "../results/makran_zagros_tri_results.geojson";
         name="Makran-Zagros tri results")
     
     Oiler.IO.write_fault_results_to_gj(results, 
-        "../results/c_asia_fault_results.geojson",
+        "../results/cea_fault_results.geojson",
         name="Central Asia fault results",
         calc_rake=true,
         calc_slip_rate=true)
