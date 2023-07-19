@@ -24,6 +24,7 @@ tris_file = "../block_data/c_asia_sub_tris.geojson"
 chn_block_file = "../../china/block_data/chn_blocks.geojson"
 chn_fault_file = "../../china/block_data/chn_faults.geojson"
 chn_slip_rate_file = "../../china/block_data/geol_slip_rate_pts.geojson"
+zheng_gnss_file = "../../china/geod_data/gang_zheng_gnss.geojson"
 
 ana_block_file = "../../anatolia/block_data/anatolia_blocks.geojson"
 ana_fault_file = "../../anatolia/block_data/anatolia_faults.geojson"
@@ -35,8 +36,9 @@ nea_slip_rate_file = "../../ne_asia_blocks/ne_asia_slip_rates.geojson"
 
 gsrm_vels_file = "../gnss_data/gsrm_c_asia_vels.geojson"
 comet_gnss_vels_file = "../gnss_data/c_asia_vels_rollins.geojson"
-tibet_vel_field_file = "../../china/geod/tibet_vel_field_2021_12_06.geojson"
+tibet_vel_field_file = "../../china/geod_data/tibet_insar_vels_2023_04.geojson"
 zagros_vel_field_file = "../gnss_data/zagros_gacos_ml1_nonan_down_100.geojson"
+iran_vel_field_file = "../gnss_data/iran_insar_spring_23_full.geojson"
 
 #boundary_file = "../block_data/cea_gnss_block_domain.geojson"
 boundary_file = "../block_data/cea_hazard_boundary.geojson"
@@ -56,9 +58,9 @@ block_df = vcat(chn_block_df,
 
 @info "culling blocks"
 println("n blocks before ", size(block_df, 1))
-#bound_df = Oiler.IO.gis_vec_file_to_df(boundary_file)
-#block_df = Oiler.IO.get_blocks_in_bounds!(block_df, bound_df)
-#println("n blocks after ", size(block_df, 1))
+bound_df = Oiler.IO.gis_vec_file_to_df(boundary_file)
+block_df = Oiler.IO.get_blocks_in_bounds!(block_df, bound_df)
+println("n blocks after ", size(block_df, 1))
 
 @info "doing faults"
 fault_df, faults, fault_vels = Oiler.IO.process_faults_from_gis_files(
@@ -76,7 +78,7 @@ println("n fault vels: ", length(fault_vels))
 
 @info "doing non-fault block boundaries"
 @time non_fault_bounds = Oiler.IO.get_non_fault_block_bounds(block_df, faults)
-bound_vels = vcat(map(b->Oiler.Boundaries.boundary_to_vels(b, ee=0.25, en=0.25), 
+bound_vels = vcat(map(b->Oiler.Boundaries.boundary_to_vels(b, ee=2.0, en=2.0), 
                       non_fault_bounds)...)
 println("n non-fault-bound vels: ", length(bound_vels))
 
@@ -94,6 +96,14 @@ comet_vel_df.n_err .* 2.
     fix="1111"
 )
 
+@info "doing Gang Zheng GNSS vels"
+gang_df = Oiler.IO.gis_vec_file_to_df(zheng_gnss_file)
+@time gang_vels = Oiler.IO.make_vels_from_gnss_and_blocks(gang_df, block_df;
+    name=:name,
+    fix="1111"
+)
+
+
 @info "doing GSRM vels"
 @time gsrm_vels = Oiler.IO.make_vels_from_gnss_and_blocks(gsrm_vel_df, block_df;
     ve=:e_vel, vn=:n_vel, ee=:e_err, en=:n_err, name=:station,
@@ -104,43 +114,61 @@ comet_vel_df.n_err .* 2.
 
 tibet_vel_field_df = Oiler.IO.gis_vec_file_to_df(tibet_vel_field_file)
 tibet_vel_field_df[!,"station"] = map(x->join(["tibet_insar_", x]),
-                                      string.(tibet_vel_field_df[!,:v_id]))
+                                      string.(tibet_vel_field_df[!,:fid]))
 
 weiss_vel_field_df = Oiler.IO.gis_vec_file_to_df(weiss_vel_field_file)
 weiss_vel_field_df[!,"station"] = map(x->join(["weiss_", x]), 
                                       string.(weiss_vel_field_df[!,:fid]))
 
-tibet_vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(
+@time tibet_vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(
     tibet_vel_field_df, block_df; 
     name=:station, fix="1111")
 
 #subsample
-tibet_vel_field_vels = tibet_vel_field_vels[2:2:end]
+tibet_vel_field_vels = tibet_vel_field_vels[1:10:end]
+@info "$(length(tibet_vel_field_vels)) Tibet vels"
 
 @info "doing weiss vels"
-weiss_vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(
+@time weiss_vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(
     weiss_vel_field_df, block_df;
     ve=:e_vel, vn=:n_vel, ee=:e_err, en=:n_err, name=:station,
     fix="1111"
 )
 
-@info "doing zagros insar vels"
-zagros_vel_field_df = Oiler.IO.gis_vec_file_to_df(zagros_vel_field_file)
-zagros_vel_field_df[!,"station"] = map(x->join(["zagros_insar_", x]),
-                                       string.(zagros_vel_field_df[!,:fid]))
-zagros_vel_field_df[!,"e_err"] = ones(size(zagros_vel_field_df,1)) .* 2.0
-zagros_vel_field_df[!,"n_err"] = ones(size(zagros_vel_field_df,1)) .* 2.0
+#@info "doing zagros insar vels"
+#zagros_vel_field_df = Oiler.IO.gis_vec_file_to_df(zagros_vel_field_file)
+#zagros_vel_field_df[!,"station"] = map(x->join(["zagros_insar_", x]),
+#                                       string.(zagros_vel_field_df[!,:fid]))
+#zagros_vel_field_df[!,"e_err"] = ones(size(zagros_vel_field_df,1)) .* 2.0
+#zagros_vel_field_df[!,"n_err"] = ones(size(zagros_vel_field_df,1)) .* 2.0
+#
+#zagros_vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(
+#    zagros_vel_field_df, block_df; 
+#    ve=:e_vel, vn=:n_vel, ee=:e_err, en=:n_err, name=:station,
+#    fix="1111")
 
-zagros_vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(
-    zagros_vel_field_df, block_df; 
-    ve=:e_vel, vn=:n_vel, ee=:e_err, en=:n_err, name=:station,
-    fix="1111")
+@info "doing Iran InSAR vels"
+@info "  ...reading and processing"
+iran_vel_field_df = Oiler.IO.gis_vec_file_to_df(iran_vel_field_file)
+iran_vel_field_df[!, "station"] = map(x->join(["iran_insar_",x]),
+                                      string.(iran_vel_field_df[!,:fid]))
+
+iran_vel_field_df = iran_vel_field_df[1:10000:end,:]
+
+@info "  ...making vels"
+@time iran_vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(
+    iran_vel_field_df, block_df;
+    name=:station, fix="1111")
+
+@info "$(length(iran_vel_field_vels)) Iran vels"
     
 gnss_vels = vcat(comet_vels, 
                  gsrm_vels,
                  tibet_vel_field_vels,
                  weiss_vel_field_vels,
-                 zagros_vel_field_vels,
+                 #zagros_vel_field_vels,
+                 gang_vels,
+                 iran_vel_field_vels,
                  )
 
 println("n gnss vels: ", length(gnss_vels))
@@ -192,10 +220,11 @@ results = Oiler.solve_block_invs_from_vel_groups(vel_groups; faults=faults,
                                                 tris,
                                                 sparse_lhs=true,
                                                 weighted=true,
-                                                elastic_floor=1e-2,
+                                                elastic_floor=1e-3,
                                                 regularize_tris=true,
                                                 tri_priors=false,
                                                 tri_distance_weight=20.,
+                                                check_nans=true,
                                                 predict_vels=true,
                                                 check_closures=true,
                                                 pred_se=true,
