@@ -21,24 +21,26 @@ cea_block_file = "../block_data/c_asia_blocks.geojson"
 cea_slip_rate_file = "../block_data/c_asia_geol_slip_rates.geojson"
 tris_file = "../block_data/c_asia_sub_tris.geojson"
 
-chn_block_file = "../../china/block_data/chn_blocks.geojson"
-chn_fault_file = "../../china/block_data/chn_faults.geojson"
-chn_slip_rate_file = "../../china/block_data/geol_slip_rate_pts.geojson"
-zheng_gnss_file = "../../china/geod_data/gang_zheng_gnss.geojson"
+chn_block_file = "../../china_active_faults/block_data/chn_blocks.geojson"
+chn_fault_file = "../../china_active_faults/block_data/chn_faults.geojson"
+chn_slip_rate_file = "../../china_active_faults/block_data/geol_slip_rate_pts.geojson"
+zheng_gnss_file = "../../china_active_faults/geod_data/gang_zheng_gnss.geojson"
 
-ana_block_file = "../../anatolia/block_data/anatolia_blocks.geojson"
-ana_fault_file = "../../anatolia/block_data/anatolia_faults.geojson"
-weiss_vel_field_file = "../../anatolia/geod_data/weiss_et_al_2020_vels_down_100.geojson"
+ana_block_file = "../../anatolia_blocks/block_data/anatolia_blocks.geojson"
+ana_fault_file = "../../anatolia_blocks/block_data/anatolia_faults.geojson"
+weiss_vel_field_file = "../../anatolia_blocks/geod_data/weiss_et_al_2020_vels_down_100.geojson"
 
 nea_block_file = "../../ne_asia_blocks/ne_asia_blocks.geojson"
 nea_fault_file = "../../ne_asia_blocks/ne_asia_faults.geojson"
 nea_slip_rate_file = "../../ne_asia_blocks/ne_asia_slip_rates.geojson"
 
+glo_block_file = "../../global_scale_plates/global_scale_plates.geojson"
+
 gsrm_vels_file = "../gnss_data/gsrm_c_asia_vels.geojson"
 comet_gnss_vels_file = "../gnss_data/c_asia_vels_rollins.geojson"
-tibet_vel_field_file = "../../china/geod_data/tibet_insar_vels_2023_04.geojson"
+tibet_vel_field_file = "../../china_active_faults/geod_data/tibet_insar_vels_2023_04.geojson"
 zagros_vel_field_file = "../gnss_data/zagros_gacos_ml1_nonan_down_100.geojson"
-iran_vel_field_file = "../gnss_data/iran_insar_spring_23_full.geojson"
+iran_vel_field_file = "../gnss_data/iran_insar_spring_23_down_100.geojson"
 
 #boundary_file = "../block_data/cea_gnss_block_domain.geojson"
 boundary_file = "../block_data/cea_hazard_boundary.geojson"
@@ -49,10 +51,12 @@ cea_block_df = Oiler.IO.gis_vec_file_to_df(cea_block_file)
 chn_block_df = Oiler.IO.gis_vec_file_to_df(chn_block_file)
 ana_block_df = Oiler.IO.gis_vec_file_to_df(ana_block_file)
 nea_block_df = Oiler.IO.gis_vec_file_to_df(nea_block_file)
+glo_block_df = Oiler.IO.gis_vec_file_to_df(glo_block_file, fid_drop=["ant"])
 chn_block_df.fid = string.(chn_block_df.fid)
 block_df = vcat(chn_block_df, 
                 ana_block_df,
-                #nea_block_df,
+                nea_block_df,
+                glo_block_df,
                 cea_block_df; 
                 cols=:union)
 
@@ -153,7 +157,7 @@ iran_vel_field_df = Oiler.IO.gis_vec_file_to_df(iran_vel_field_file)
 iran_vel_field_df[!, "station"] = map(x->join(["iran_insar_",x]),
                                       string.(iran_vel_field_df[!,:fid]))
 
-iran_vel_field_df = iran_vel_field_df[1:10000:end,:]
+iran_vel_field_df = iran_vel_field_df[1:10:end,:]
 
 @info "  ...making vels"
 @time iran_vel_field_vels = Oiler.IO.make_vels_from_gnss_and_blocks(
@@ -272,14 +276,16 @@ if save_results == true
 
 end
 
+Oiler.WebViewer.write_web_viewer(results=results, block_df=block_df,
+                                 ref_pole="1111", directory="../web_viewer")
+
 map_fig = Oiler.Plots.plot_results_map(results, vel_groups, faults, tris)
 
 slip_rate_fig = Oiler.Plots.plot_slip_rate_fig(geol_slip_rate_df,
     geol_slip_rate_vels, fault_df, results)
 
-Oiler.WebViewer.write_web_viewer(results=results, block_df=block_df,
-                                 ref_pole="1111", directory="../web_viewer")
-
 show()
+
+
 
 
